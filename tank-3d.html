@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 3D Tank Commander</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+KR:wght@400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: #000;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        #gameCanvas {
+            display: block;
+        }
+
+        /* HUD Overlay */
+        .hud {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px 40px;
+        }
+
+        .hud-box {
+            background: rgba(0, 20, 0, 0.7);
+            border: 2px solid #0f0;
+            padding: 15px 25px;
+            border-radius: 5px;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .hud-label {
+            color: #0a0;
+            font-size: 0.7rem;
+            margin-bottom: 5px;
+        }
+
+        .hud-value {
+            color: #0f0;
+            font-size: 1.5rem;
+            text-shadow: 0 0 10px #0f0;
+        }
+
+        /* Crosshair */
+        .crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .crosshair-h,
+        .crosshair-v {
+            position: absolute;
+            background: rgba(0, 255, 0, 0.8);
+        }
+
+        .crosshair-h {
+            width: 40px;
+            height: 2px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .crosshair-h.left {
+            transform: translate(-150%, -50%);
+        }
+
+        .crosshair-h.right {
+            transform: translate(50%, -50%);
+        }
+
+        .crosshair-v {
+            width: 2px;
+            height: 40px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .crosshair-v.top {
+            transform: translate(-50%, -150%);
+        }
+
+        .crosshair-v.bottom {
+            transform: translate(-50%, 50%);
+        }
+
+        .crosshair-center {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border: 2px solid #0f0;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        /* Tank interior frame */
+        .tank-frame {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(180deg, transparent 0%, rgba(30, 30, 30, 0.9) 30%, #1a1a1a 100%);
+            pointer-events: none;
+        }
+
+        .tank-frame::before {
+            content: '';
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 400px;
+            height: 100px;
+            background: linear-gradient(180deg, transparent, rgba(50, 50, 50, 0.8));
+            border-radius: 50% 50% 0 0;
+        }
+
+        /* Scope overlay */
+        .scope-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: radial-gradient(circle at center, transparent 30%, rgba(0, 0, 0, 0.3) 60%, rgba(0, 0, 0, 0.8) 100%);
+        }
+
+        /* Aiming indicator */
+        .aim-indicator {
+            position: fixed;
+            bottom: 220px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Orbitron', sans-serif;
+            color: #0f0;
+            text-shadow: 0 0 10px #0f0;
+            pointer-events: none;
+        }
+
+        .aim-indicator .angle {
+            font-size: 1.8rem;
+        }
+
+        .aim-indicator .label {
+            font-size: 0.8rem;
+            color: #0a0;
+        }
+
+        /* Status messages */
+        .status-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 3rem;
+            color: #f00;
+            text-shadow: 0 0 20px #f00;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .status-message.show {
+            opacity: 1;
+        }
+
+        /* Reload bar */
+        .reload-container {
+            position: fixed;
+            bottom: 180px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            pointer-events: none;
+        }
+
+        .reload-label {
+            font-family: 'Orbitron', sans-serif;
+            color: #0a0;
+            font-size: 0.7rem;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+
+        .reload-bar {
+            height: 8px;
+            background: rgba(0, 50, 0, 0.5);
+            border: 1px solid #0f0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .reload-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0a0, #0f0);
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+
+        /* Controls hint */
+        .controls-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Orbitron', sans-serif;
+            color: rgba(0, 255, 0, 0.5);
+            font-size: 0.75rem;
+            pointer-events: none;
+        }
+
+        .controls-hint span {
+            margin: 0 15px;
+        }
+
+        /* Game over / Start screen */
+        .game-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+        }
+
+        .game-screen.hidden {
+            display: none;
+        }
+
+        .game-screen h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 4rem;
+            color: #0f0;
+            text-shadow: 0 0 30px #0f0;
+            margin-bottom: 20px;
+        }
+
+        .game-screen p {
+            color: #0a0;
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+        }
+
+        .game-screen .score-display {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            color: #ff0;
+            margin-bottom: 40px;
+        }
+
+        .start-btn {
+            font-family: 'Orbitron', sans-serif;
+            background: transparent;
+            border: 2px solid #0f0;
+            color: #0f0;
+            padding: 15px 60px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            pointer-events: auto;
+        }
+
+        .start-btn:hover {
+            background: #0f0;
+            color: #000;
+            box-shadow: 0 0 30px #0f0;
+        }
+
+        /* Hit effect */
+        .hit-flash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 0, 0, 0.3);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s ease;
+        }
+
+        .hit-flash.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Scope overlay -->
+    <div class="scope-overlay"></div>
+
+    <!-- Crosshair -->
+    <div class="crosshair">
+        <div class="crosshair-h left"></div>
+        <div class="crosshair-h right"></div>
+        <div class="crosshair-v top"></div>
+        <div class="crosshair-v bottom"></div>
+        <div class="crosshair-center"></div>
+    </div>
+
+    <!-- HUD -->
+    <div class="hud">
+        <div class="hud-top">
+            <div class="hud-box">
+                <div class="hud-label">SCORE</div>
+                <div class="hud-value" id="score">0</div>
+            </div>
+            <div class="hud-box">
+                <div class="hud-label">TARGETS</div>
+                <div class="hud-value" id="targets">0</div>
+            </div>
+            <div class="hud-box">
+                <div class="hud-label">AMMO</div>
+                <div class="hud-value" id="ammo">20</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Aim indicator -->
+    <div class="aim-indicator">
+        <div class="label">ELEVATION</div>
+        <div class="angle" id="elevation">0°</div>
+    </div>
+
+    <!-- Reload bar -->
+    <div class="reload-container">
+        <div class="reload-label">RELOAD</div>
+        <div class="reload-bar">
+            <div class="reload-fill" id="reloadFill"></div>
+        </div>
+    </div>
+
+    <!-- Tank frame -->
+    <div class="tank-frame"></div>
+
+    <!-- Controls hint -->
+    <div class="controls-hint">
+        <span>↑↓ 편사각 조준</span>
+        <span>←→ 방위각 조준</span>
+        <span>SPACE 발사</span>
+    </div>
+
+    <!-- Status message -->
+    <div class="status-message" id="statusMessage">HIT!</div>
+
+    <!-- Hit flash -->
+    <div class="hit-flash" id="hitFlash"></div>
+
+    <!-- Start screen -->
+    <div class="game-screen" id="startScreen">
+        <h1>TANK COMMANDER</h1>
+        <p>3D 탱크 시뮬레이터</p>
+        <button class="start-btn" onclick="startGame()">START MISSION</button>
+    </div>
+
+    <!-- Game over screen -->
+    <div class="game-screen hidden" id="gameoverScreen">
+        <h1>MISSION FAILED</h1>
+        <div class="score-display">SCORE: <span id="finalScore">0</span></div>
+        <button class="start-btn" onclick="restartGame()">RETRY</button>
+    </div>
+
+    <script>
+        // ==================== Setup ====================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Canvas size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Game state
+        let gameRunning = false;
+        let score = 0;
+        let ammo = 20;
+        let targetsDestroyed = 0;
+
+        // Camera/Aiming
+        let cameraYaw = 0;      // Horizontal rotation (방위각)
+        let cameraPitch = 0;    // Vertical rotation (편사각)
+        const maxPitch = 30;
+        const maxYaw = 60;
+        const aimSpeed = 1.5;
+
+        // Reload system
+        let reloadTime = 0;
+        const maxReloadTime = 60; // frames
+
+        // Projectile
+        let projectile = null;
+        let projectileTime = 0;
+
+        // Enemies
+        let enemies = [];
+        let spawnTimer = 0;
+        const spawnInterval = 180;
+
+        // Effects
+        let explosions = [];
+        let muzzleFlash = 0;
+
+        // Input
+        const keys = {};
+
+        // ==================== 3D Math ====================
+        function project3D(x, y, z) {
+            // Apply camera rotation
+            const cosYaw = Math.cos(cameraYaw * Math.PI / 180);
+            const sinYaw = Math.sin(cameraYaw * Math.PI / 180);
+            const cosPitch = Math.cos(cameraPitch * Math.PI / 180);
+            const sinPitch = Math.sin(cameraPitch * Math.PI / 180);
+
+            // Rotate around Y axis (yaw)
+            let rx = x * cosYaw - z * sinYaw;
+            let rz = x * sinYaw + z * cosYaw;
+
+            // Rotate around X axis (pitch)
+            let ry = y * cosPitch - rz * sinPitch;
+            rz = y * sinPitch + rz * cosPitch;
+
+            // Perspective projection
+            const fov = 500;
+            const scale = fov / (fov + rz);
+
+            if (rz < 10) return null; // Behind camera
+
+            return {
+                x: canvas.width / 2 + rx * scale,
+                y: canvas.height / 2 - ry * scale,
+                scale: scale,
+                z: rz
+            };
+        }
+
+        // ==================== Drawing ====================
+        function drawSky() {
+            // Sky gradient based on pitch
+            const pitchOffset = cameraPitch * 3;
+            const gradient = ctx.createLinearGradient(0, 0 - pitchOffset, 0, canvas.height - pitchOffset);
+            gradient.addColorStop(0, '#001428');
+            gradient.addColorStop(0.4, '#002850');
+            gradient.addColorStop(0.7, '#1a4a3a');
+            gradient.addColorStop(1, '#2d4a28');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawGround() {
+            // Ground plane with perspective grid
+            ctx.strokeStyle = 'rgba(0, 100, 0, 0.3)';
+            ctx.lineWidth = 1;
+
+            // Draw grid lines
+            for (let z = 100; z < 3000; z += 100) {
+                const left = project3D(-2000, 0, z);
+                const right = project3D(2000, 0, z);
+
+                if (left && right && left.y < canvas.height && right.y < canvas.height) {
+                    ctx.beginPath();
+                    ctx.moveTo(left.x, left.y);
+                    ctx.lineTo(right.x, right.y);
+                    ctx.stroke();
+                }
+            }
+
+            for (let x = -2000; x <= 2000; x += 200) {
+                const near = project3D(x, 0, 100);
+                const far = project3D(x, 0, 3000);
+
+                if (near && far) {
+                    ctx.beginPath();
+                    ctx.moveTo(near.x, near.y);
+                    ctx.lineTo(far.x, far.y);
+                    ctx.stroke();
+                }
+            }
+
+            // Horizon line
+            const horizonY = canvas.height / 2 + cameraPitch * 5;
+            ctx.strokeStyle = 'rgba(0, 150, 0, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, horizonY);
+            ctx.lineTo(canvas.width, horizonY);
+            ctx.stroke();
+        }
+
+        function drawEnemy(enemy) {
+            const pos = project3D(enemy.x, enemy.y + enemy.height / 2, enemy.z);
+            if (!pos) return;
+
+            const size = 80 * pos.scale;
+            if (size < 5) return;
+
+            // Tank body
+            ctx.fillStyle = '#4a3020';
+            ctx.fillRect(pos.x - size, pos.y - size / 2, size * 2, size);
+
+            // Turret
+            ctx.fillStyle = '#3a2515';
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y - size / 4, size / 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Barrel
+            ctx.fillStyle = '#2a1a0a';
+            ctx.save();
+            ctx.translate(pos.x, pos.y - size / 4);
+            ctx.rotate(-enemy.turretAngle * Math.PI / 180);
+            ctx.fillRect(0, -size / 8, size * 1.2, size / 4);
+            ctx.restore();
+
+            // Tracks
+            ctx.fillStyle = '#222';
+            ctx.fillRect(pos.x - size * 1.1, pos.y + size / 3, size * 2.2, size / 4);
+
+            // Distance indicator
+            const dist = Math.floor(enemy.z);
+            ctx.fillStyle = '#0f0';
+            ctx.font = `${Math.max(12, 14 * pos.scale)}px Orbitron`;
+            ctx.textAlign = 'center';
+            ctx.fillText(`${dist}m`, pos.x, pos.y + size + 20);
+
+            // Store screen position for hit detection
+            enemy.screenX = pos.x;
+            enemy.screenY = pos.y;
+            enemy.screenSize = size;
+        }
+
+        function drawProjectile() {
+            if (!projectile) return;
+
+            const pos = project3D(projectile.x, projectile.y, projectile.z);
+            if (!pos) return;
+
+            const size = 10 * pos.scale;
+
+            // Trail
+            ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
+            ctx.lineWidth = size;
+            ctx.lineCap = 'round';
+
+            const prevPos = project3D(projectile.x - projectile.vx * 3, projectile.y - projectile.vy * 3, projectile.z - projectile.vz * 3);
+            if (prevPos) {
+                ctx.beginPath();
+                ctx.moveTo(prevPos.x, prevPos.y);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
+            }
+
+            // Projectile
+            ctx.fillStyle = '#ff0';
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, size * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawExplosion(exp) {
+            const pos = project3D(exp.x, exp.y, exp.z);
+            if (!pos) return;
+
+            const progress = exp.time / exp.duration;
+            const radius = exp.maxRadius * pos.scale * Math.sin(progress * Math.PI);
+            const alpha = 1 - progress;
+
+            // Explosion glow
+            const gradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, radius);
+            gradient.addColorStop(0, `rgba(255, 255, 200, ${alpha})`);
+            gradient.addColorStop(0.3, `rgba(255, 150, 0, ${alpha * 0.8})`);
+            gradient.addColorStop(0.6, `rgba(255, 50, 0, ${alpha * 0.5})`);
+            gradient.addColorStop(1, 'rgba(100, 0, 0, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Smoke
+            if (progress > 0.3) {
+                const smokeAlpha = (1 - progress) * 0.5;
+                ctx.fillStyle = `rgba(50, 50, 50, ${smokeAlpha})`;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y + radius * 0.5, radius * 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawMuzzleFlash() {
+            if (muzzleFlash <= 0) return;
+
+            const alpha = muzzleFlash / 10;
+            const size = 100 + (10 - muzzleFlash) * 20;
+
+            // Flash at center bottom
+            const cx = canvas.width / 2;
+            const cy = canvas.height - 200;
+
+            const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, size);
+            gradient.addColorStop(0, `rgba(255, 255, 200, ${alpha})`);
+            gradient.addColorStop(0.3, `rgba(255, 200, 0, ${alpha * 0.8})`);
+            gradient.addColorStop(1, 'rgba(255, 100, 0, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(cx, cy, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawRangeFinder() {
+            // Range finder marks
+            ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+            ctx.lineWidth = 1;
+
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            // Horizontal range markers
+            for (let i = 1; i <= 5; i++) {
+                const offset = i * 50;
+                ctx.beginPath();
+                ctx.moveTo(cx - offset, cy - 5);
+                ctx.lineTo(cx - offset, cy + 5);
+                ctx.moveTo(cx + offset, cy - 5);
+                ctx.lineTo(cx + offset, cy + 5);
+                ctx.stroke();
+            }
+
+            // Vertical range markers
+            for (let i = 1; i <= 3; i++) {
+                const offset = i * 50;
+                ctx.beginPath();
+                ctx.moveTo(cx - 5, cy - offset);
+                ctx.lineTo(cx + 5, cy - offset);
+                ctx.moveTo(cx - 5, cy + offset);
+                ctx.lineTo(cx + 5, cy + offset);
+                ctx.stroke();
+            }
+
+            // Distance estimation lines
+            ctx.font = '10px Orbitron';
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.4)';
+            ctx.textAlign = 'right';
+
+            [500, 1000, 1500, 2000].forEach((dist, i) => {
+                const y = cy + 30 + i * 25;
+                ctx.fillText(`${dist}m`, cx - 60, y);
+                ctx.beginPath();
+                ctx.moveTo(cx - 55, y - 3);
+                ctx.lineTo(cx - 40, y - 3);
+                ctx.stroke();
+            });
+        }
+
+        // ==================== Game Logic ====================
+        function spawnEnemy() {
+            const side = Math.random() > 0.5 ? 1 : -1;
+            enemies.push({
+                x: side * (300 + Math.random() * 500),
+                y: 0,
+                z: 800 + Math.random() * 1500,
+                height: 50,
+                vx: -side * (0.5 + Math.random() * 1),
+                vz: -0.5 - Math.random() * 0.5,
+                turretAngle: side > 0 ? 180 : 0,
+                hp: 100,
+                shootTimer: 60 + Math.random() * 120
+            });
+        }
+
+        function shoot() {
+            if (reloadTime > 0 || ammo <= 0) return;
+
+            ammo--;
+            document.getElementById('ammo').textContent = ammo;
+
+            // Calculate projectile direction based on aim
+            const pitchRad = cameraPitch * Math.PI / 180;
+            const yawRad = cameraYaw * Math.PI / 180;
+
+            const speed = 50;
+            projectile = {
+                x: 0,
+                y: 50,
+                z: 100,
+                vx: -Math.sin(yawRad) * speed * Math.cos(pitchRad),
+                vy: Math.sin(pitchRad) * speed * 0.5,
+                vz: Math.cos(yawRad) * speed * Math.cos(pitchRad)
+            };
+
+            projectileTime = 0;
+            reloadTime = maxReloadTime;
+            muzzleFlash = 10;
+
+            if (ammo <= 0) {
+                setTimeout(() => {
+                    gameOver();
+                }, 2000);
+            }
+        }
+
+        function createExplosion(x, y, z, size = 100) {
+            explosions.push({
+                x, y, z,
+                time: 0,
+                duration: 45,
+                maxRadius: size
+            });
+        }
+
+        function showHitMessage(text, color = '#0f0') {
+            const msg = document.getElementById('statusMessage');
+            msg.textContent = text;
+            msg.style.color = color;
+            msg.style.textShadow = `0 0 20px ${color}`;
+            msg.classList.add('show');
+            setTimeout(() => msg.classList.remove('show'), 500);
+        }
+
+        function updateProjectile() {
+            if (!projectile) return;
+
+            projectile.x += projectile.vx;
+            projectile.y += projectile.vy;
+            projectile.z += projectile.vz;
+            projectile.vy -= 0.3; // Gravity
+
+            projectileTime++;
+
+            // Check ground hit
+            if (projectile.y <= 0) {
+                createExplosion(projectile.x, 0, projectile.z, 50);
+                projectile = null;
+                return;
+            }
+
+            // Check out of range
+            if (projectile.z > 3000 || projectile.z < 0 || Math.abs(projectile.x) > 2000) {
+                projectile = null;
+                return;
+            }
+
+            // Check enemy hits
+            enemies.forEach((enemy, index) => {
+                const dx = projectile.x - enemy.x;
+                const dy = projectile.y - (enemy.y + enemy.height / 2);
+                const dz = projectile.z - enemy.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                if (dist < 80) {
+                    createExplosion(enemy.x, enemy.y + enemy.height / 2, enemy.z, 150);
+                    enemies.splice(index, 1);
+                    projectile = null;
+
+                    score += 1000;
+                    targetsDestroyed++;
+                    document.getElementById('score').textContent = score;
+                    document.getElementById('targets').textContent = targetsDestroyed;
+
+                    showHitMessage('TARGET DESTROYED!', '#ff0');
+                }
+            });
+        }
+
+        function updateEnemies() {
+            enemies = enemies.filter(enemy => {
+                enemy.x += enemy.vx;
+                enemy.z += enemy.vz;
+
+                // Enemy shoots back
+                enemy.shootTimer--;
+                if (enemy.shootTimer <= 0 && enemy.z > 200) {
+                    // Enemy hit (simplified - random chance based on distance)
+                    const hitChance = 0.1 - enemy.z / 20000;
+                    if (Math.random() < hitChance) {
+                        document.getElementById('hitFlash').classList.add('show');
+                        setTimeout(() => document.getElementById('hitFlash').classList.remove('show'), 100);
+                        showHitMessage('INCOMING!', '#f00');
+                    }
+                    enemy.shootTimer = 120 + Math.random() * 180;
+                }
+
+                // Remove if too close or too far
+                if (enemy.z < 50) {
+                    showHitMessage('ENEMY BREACH!', '#f00');
+                    gameOver();
+                    return false;
+                }
+                if (enemy.z > 3000 || Math.abs(enemy.x) > 2000) {
+                    return false;
+                }
+
+                return true;
+            });
+        }
+
+        function updateExplosions() {
+            explosions = explosions.filter(exp => {
+                exp.time++;
+                return exp.time < exp.duration;
+            });
+        }
+
+        function handleInput() {
+            if (!gameRunning) return;
+
+            // Pitch (편사각) - Up/Down
+            if (keys['ArrowUp']) {
+                cameraPitch = Math.min(cameraPitch + aimSpeed, maxPitch);
+            }
+            if (keys['ArrowDown']) {
+                cameraPitch = Math.max(cameraPitch - aimSpeed, -maxPitch);
+            }
+
+            // Yaw (방위각) - Left/Right
+            if (keys['ArrowLeft']) {
+                cameraYaw = Math.min(cameraYaw + aimSpeed, maxYaw);
+            }
+            if (keys['ArrowRight']) {
+                cameraYaw = Math.max(cameraYaw - aimSpeed, -maxYaw);
+            }
+
+            document.getElementById('elevation').textContent = `${cameraPitch.toFixed(1)}°`;
+        }
+
+        function updateReload() {
+            if (reloadTime > 0) {
+                reloadTime--;
+                document.getElementById('reloadFill').style.width = ((maxReloadTime - reloadTime) / maxReloadTime * 100) + '%';
+            }
+
+            if (muzzleFlash > 0) muzzleFlash--;
+        }
+
+        // ==================== Game States ====================
+        function startGame() {
+            document.getElementById('startScreen').classList.add('hidden');
+            gameRunning = true;
+            score = 0;
+            ammo = 20;
+            targetsDestroyed = 0;
+            cameraYaw = 0;
+            cameraPitch = 0;
+            enemies = [];
+            explosions = [];
+            projectile = null;
+            spawnTimer = 0;
+
+            document.getElementById('score').textContent = score;
+            document.getElementById('ammo').textContent = ammo;
+            document.getElementById('targets').textContent = targetsDestroyed;
+
+            gameLoop();
+        }
+
+        function restartGame() {
+            document.getElementById('gameoverScreen').classList.add('hidden');
+            startGame();
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameoverScreen').classList.remove('hidden');
+        }
+
+        // ==================== Main Loop ====================
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawSky();
+            drawGround();
+
+            // Sort enemies by distance (far to near)
+            enemies.sort((a, b) => b.z - a.z);
+            enemies.forEach(e => drawEnemy(e));
+
+            drawProjectile();
+            explosions.forEach(e => drawExplosion(e));
+            drawMuzzleFlash();
+            drawRangeFinder();
+
+            if (gameRunning) {
+                handleInput();
+                updateProjectile();
+                updateEnemies();
+                updateExplosions();
+                updateReload();
+
+                // Spawn enemies
+                spawnTimer++;
+                if (spawnTimer >= spawnInterval) {
+                    spawnEnemy();
+                    spawnTimer = 0;
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ==================== Event Listeners ====================
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+
+            if (e.key === ' ' && gameRunning) {
+                e.preventDefault();
+                shoot();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Initial draw
+        drawSky();
+        drawGround();
+        drawRangeFinder();
+    </script>
+</body>
+
+</html>
