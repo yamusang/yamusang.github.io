@@ -416,7 +416,7 @@
         let score = 0;
         let ammo = 20;
         let targetsDestroyed = 0;
-
+        let lastTime = 0;
         // Camera/Aiming
         let cameraYaw = 0;      // Horizontal rotation (방위각)
         let cameraPitch = 0;    // Vertical rotation (편사각)
@@ -763,50 +763,54 @@
             setTimeout(() => msg.classList.remove('show'), 500);
         }
 
-        function updateProjectile() {
-            if (!projectile) return;
+        function updateProjectile(dt) {
+    if (!projectile) return;
 
-            projectile.x += projectile.vx;
-            projectile.y += projectile.vy;
-            projectile.z += projectile.vz;
-            projectile.vy -= 0.3; // Gravity
+    // dt 기준 이동
+    projectile.x += projectile.vx * dt * 60;
+    projectile.y += projectile.vy * dt * 60;
+    projectile.z += projectile.vz * dt * 60;
 
-            projectileTime++;
+    // 중력 (m/s^2 느낌으로)
+    const g = 18; // 체감용 값(크면 더 빨리 떨어짐)
+    projectile.vy -= g * dt * 60;
 
-            // Check ground hit
-            if (projectile.y <= 0) {
-                createExplosion(projectile.x, 0, projectile.z, 50);
-                projectile = null;
-                return;
-            }
+    projectileTime++;
 
-            // Check out of range
-            if (projectile.z > 3000 || projectile.z < 0 || Math.abs(projectile.x) > 2000) {
-                projectile = null;
-                return;
-            }
+    if (projectile.y <= 0) {
+        createExplosion(projectile.x, 0, projectile.z, 50);
+        projectile = null;
+        return;
+    }
 
-            // Check enemy hits
-            enemies.forEach((enemy, index) => {
-                const dx = projectile.x - enemy.x;
-                const dy = projectile.y - (enemy.y + enemy.height / 2);
-                const dz = projectile.z - enemy.z;
-                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (projectile.z > 3000 || projectile.z < 0 || Math.abs(projectile.x) > 2000) {
+        projectile = null;
+        return;
+    }
 
-                if (dist < 80) {
-                    createExplosion(enemy.x, enemy.y + enemy.height / 2, enemy.z, 150);
-                    enemies.splice(index, 1);
-                    projectile = null;
+    // 충돌 체크(원통/구 근사)
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+        const dx = projectile.x - enemy.x;
+        const dy = projectile.y - (enemy.y + enemy.height / 2);
+        const dz = projectile.z - enemy.z;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-                    score += 1000;
-                    targetsDestroyed++;
-                    document.getElementById('score').textContent = score;
-                    document.getElementById('targets').textContent = targetsDestroyed;
+        if (dist < 80) {
+            createExplosion(enemy.x, enemy.y + enemy.height / 2, enemy.z, 150);
+            enemies.splice(i, 1);
+            projectile = null;
 
-                    showHitMessage('TARGET DESTROYED!', '#ff0');
-                }
-            });
+            score += 1000;
+            targetsDestroyed++;
+            document.getElementById('score').textContent = score;
+            document.getElementById('targets').textContent = targetsDestroyed;
+
+            showHitMessage('TARGET DESTROYED!', '#ff0');
+            break;
         }
+    }
+}
 
         function updateEnemies() {
             enemies = enemies.filter(enemy => {
@@ -859,12 +863,8 @@
             }
 
             // Yaw (방위각) - Left/Right
-            if (keys['ArrowLeft']) {
-                cameraYaw = Math.min(cameraYaw + aimSpeed, maxYaw);
-            }
-            if (keys['ArrowRight']) {
-                cameraYaw = Math.max(cameraYaw - aimSpeed, -maxYaw);
-            }
+            if (keys['ArrowLeft'])  cameraYaw = Math.max(cameraYaw - aimSpeed, -maxYaw);
+if (keys['ArrowRight']) cameraYaw = Math.min(cameraYaw + aimSpeed,  maxYaw);
 
             document.getElementById('elevation').textContent = `${cameraPitch.toFixed(1)}°`;
         }
@@ -911,39 +911,40 @@
         }
 
         // ==================== Main Loop ====================
-        function gameLoop() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        function gameLoop(t = 0) {
+    const dt = Math.min(0.033, (t - lastTime) / 1000 || 0.016); // 최대 33ms 캡
+    lastTime = t;
 
-            drawSky();
-            drawGround();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Sort enemies by distance (far to near)
-            enemies.sort((a, b) => b.z - a.z);
-            enemies.forEach(e => drawEnemy(e));
+    drawSky();
+    drawGround();
 
-            drawProjectile();
-            explosions.forEach(e => drawExplosion(e));
-            drawMuzzleFlash();
-            drawRangeFinder();
+    enemies.sort((a, b) => b.z - a.z);
+    enemies.forEach(e => drawEnemy(e));
 
-            if (gameRunning) {
-                handleInput();
-                updateProjectile();
-                updateEnemies();
-                updateExplosions();
-                updateReload();
+    drawProjectile();
+    explosions.forEach(e => drawExplosion(e));
+    drawMuzzleFlash();
+    drawRangeFinder();
 
-                // Spawn enemies
-                spawnTimer++;
-                if (spawnTimer >= spawnInterval) {
-                    spawnEnemy();
-                    spawnTimer = 0;
-                }
-            }
+    if (gameRunning) {
+        handleInput();
 
-            requestAnimationFrame(gameLoop);
+        updateProjectile(dt);
+        updateEnemies(dt);
+        updateExplosions(dt);
+        updateReload(dt);
+
+        spawnTimer += dt;
+        if (spawnTimer >= spawnInterval / 60) { // spawnInterval이 프레임 기준(180)이었으니 초로 환산
+            spawnEnemy();
+            spawnTimer = 0;
         }
+    }
 
+    requestAnimationFrame(gameLoop);
+}
         // ==================== Event Listeners ====================
         document.addEventListener('keydown', (e) => {
             keys[e.key] = true;
