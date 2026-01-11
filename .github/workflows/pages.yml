@@ -1,0 +1,53 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # (선택) tank-3d.html만 있고 index.html이 없다면, 배포용 폴더에 index로 복사
+      - name: Prepare site
+        run: |
+          mkdir -p _site
+          if [ -f index.html ]; then
+            cp index.html _site/index.html
+          elif [ -f tank-3d.html ]; then
+            cp tank-3d.html _site/index.html
+          else
+            echo "No index.html or tank-3d.html found" && exit 1
+          fi
+          # 다른 정적 파일(이미지/사운드/js/css 등)도 같이 배포하려면 전부 복사
+          shopt -s extglob
+          cp -r !(._site|.git|.github) _site/ 2>/dev/null || true
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "_site"
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
